@@ -1,9 +1,10 @@
+```python
 from fastapi import FastAPI, HTTPException, Header, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
-    title="Video Game Dictionary",
-    description="A beginner-friendly REST API containing simple information about video games.",
+    title="Bags",
+    description="A beginner-friendly REST API containing simple information about bags.",
     version="1.0.0"
 )
 
@@ -25,7 +26,7 @@ bags = [
     "material": "lambskin leather",
     "rating": 4.8,
     "price": "$7,800",
-    "collection": "Fall Winter 2026",
+    "collection": "New Arrival",
     "shape": "envelope",
     "color": "wine",
     "type": "Handbag",
@@ -42,7 +43,7 @@ bags = [
     "material": "monogram canvas",
     "rating": 4.7,
     "price": "$2,030",
-    "collection": "Permanent",
+    "collection": "Best Seller",
     "shape": "tote",
     "color": "brown monogram",
     "type": "Tote Bag",
@@ -59,7 +60,7 @@ bags = [
     "material": "GG supreme canvas",
     "rating": 4.6,
     "price": "$2,890",
-    "collection": "Resort 2026",
+    "collection": "Trending",
     "shape": "structured",
     "color": "beige/ebony",
     "type": "Shoulder Bag",
@@ -76,7 +77,7 @@ bags = [
     "material": "cannage lambskin",
     "rating": 4.9,
     "price": "$6,000",
-    "collection": "Fall Winter 2026",
+    "collection": "Classic",
     "shape": "structured",
     "color": "black",
     "type": "Handbag",
@@ -110,7 +111,7 @@ bags = [
     "material": "saffiano leather",
     "rating": 4.5,
     "price": "$3,200",
-    "collection": "Permanent",
+    "collection": "Everyday Essentials",
     "shape": "structured",
     "color": "red",
     "type": "Handbag",
@@ -127,7 +128,7 @@ bags = [
     "material": "calfskin",
     "rating": 4.7,
     "price": "$3,500",
-    "collection": "Fall Winter 2026",
+    "collection": "Featured",
     "shape": "geometric",
     "color": "tan",
     "type": "Shoulder Bag",
@@ -144,7 +145,7 @@ bags = [
     "material": "grained leather",
     "rating": 4.6,
     "price": "$2,450",
-    "collection": "Permanent",
+    "collection": "Best Seller",
     "shape": "structured",
     "color": "black",
     "type": "Handbag",
@@ -161,7 +162,7 @@ bags = [
     "material": "calfskin",
     "rating": 4.4,
     "price": "$2,800",
-    "collection": "Fall Winter 2026",
+    "collection": "Trending",
     "shape": "tote",
     "color": "ivory",
     "type": "Tote Bag",
@@ -178,7 +179,7 @@ bags = [
     "material": "nappa leather",
     "rating": 4.8,
     "price": "$4,500",
-    "collection": "Fall Winter 2026",
+    "collection": "Featured",
     "shape": "structured",
     "color": "taupe",
     "type": "Handbag",
@@ -195,7 +196,7 @@ bags = [
     "material": "grain de poudre leather",
     "rating": 4.7,
     "price": "$2,200",
-    "collection": "Permanent",
+    "collection": "Classic",
     "shape": "envelope",
     "color": "black",
     "type": "Shoulder Bag",
@@ -212,7 +213,7 @@ bags = [
     "material": "croc-embossed leather",
     "rating": 4.5,
     "price": "$2,600",
-    "collection": "Fall Winter 2026",
+    "collection": "New Arrival",
     "shape": "curved",
     "color": "emerald green",
     "type": "Handbag",
@@ -229,7 +230,7 @@ bags = [
     "material": "full-grain leather",
     "rating": 4.9,
     "price": "$6,400",
-    "collection": "Fall Winter 2026",
+    "collection": "Featured",
     "shape": "structured",
     "color": "pink",
     "type": "Handbag",
@@ -246,7 +247,7 @@ bags = [
     "material": "matelassé leather",
     "rating": 4.6,
     "price": "$2,350",
-    "collection": "Permanent",
+    "collection": "Everyday Essentials",
     "shape": "soft",
     "color": "white",
     "type": "Shoulder Bag",
@@ -265,7 +266,16 @@ bags = [
     "price": "$11,500",
     "collection": "Classic",
     "shape": "structured",
-    "color": "
+
+      
+    "color": "",
+    "type": "Shoulder Bag",
+    "origin": "Italy",
+    "availability": "Boutique exclusive",
+    "description": "Iconic Fendi Baguette with hand embroidery.",
+    "buyer_notes": "Playful and collectible."
+
+      
   },
   {
     "id": 16,
@@ -275,7 +285,7 @@ bags = [
     "material": "beaded embroidery",
     "rating": 4.8,
     "price": "$4,200",
-    "collection": "Resort 2026",
+    "collection": "Limited Edition",
     "shape": "rectangular",
     "color": "multicolor",
     "type": "Shoulder Bag",
@@ -292,7 +302,7 @@ bags = [
     "material": "smooth leather",
     "rating": 4.3,
     "price": "$650",
-    "collection": "Spring Summer 2026",
+    "collection": "Trending",
     "shape": "top handle",
     "color": "white",
     "type": "Mini Bag",
@@ -309,7 +319,7 @@ bags = [
     "material": "nylon",
     "rating": 4.5,
     "price": "$495",
-    "collection": "Permanent",
+    "collection": "Everyday Essentials",
     "shape": "backpack",
     "color": "black",
     "type": "Backpack",
@@ -326,7 +336,7 @@ bags = [
     "material": "suede",
     "rating": 4.4,
     "price": "$1,650",
-    "collection": "Fall Winter 2026",
+    "collection": "Featured",
     "shape": "satchel",
     "color": "burgundy",
     "type": "Satchel",
@@ -343,7 +353,7 @@ bags = [
     "material": "textured leather",
     "rating": 4.6,
     "price": "$350",
-    "collection": "Permanent",
+    "collection": "Best Seller",
     "shape": "flap",
     "color": "powder pink",
     "type": "Crossbody",
@@ -359,39 +369,45 @@ bags = [
 def home():
 
     return {
-        "message": "Welcome to the Video Game Dictionary!",
+        "message": "Welcome to the Bag Retailer API!",
         "endpoints": [
-            "/vgames",
-            "/vgames/{id}",
-            "/vgames/search"
+            "/bags",
+            "/bags/{id}",
+            "/bags/search"
         ]
     }
 
 
 # GET ALL BAGS
-@app.get("/vgames")
-def get_vgames():
+@app.get("/bags")
+def get_bags():
 
     return {
-        "count": len(vgames),
-        "vgames": vgames
+        "count": len(bags),
+        "bags": bags
     }
 
+
 # SEARCH BAGS
-@app.get("/vgames/search")
-def search_vgames( q: str = Query(..., min_length=1)):
+@app.get("/bags/search")
+def search_bags(q: str = Query(..., min_length=1)):
     q = q.lower()
     results = []
-    for games in vgames:
+    for bag in bags:
         searchable_text = (
-            f"{games['title']} "
-            f"{games['genre']} "
-            f"{games['year']} "
-            f"{games['platform']}"
+            f"{bag['name']} "
+            f"{bag['brand']} "
+            f"{bag['size']} "
+            f"{bag['material']} "
+            f"{bag['collection']} "
+            f"{bag['shape']} "
+            f"{bag['color']} "
+            f"{bag['type']} "
+            f"{bag['origin']}"
         ).lower()
 
         if q in searchable_text:
-            results.append(games)
+            results.append(bag)
 
     return {
         "query": q,
@@ -399,18 +415,16 @@ def search_vgames( q: str = Query(..., min_length=1)):
         "results": results
     }
     
-# GET ONE BAGS
-@app.get("/vgames/{game_id}")
-def get_game(game_id: int):
+# GET ONE BAG
+@app.get("/bags/{bag_id}")
+def get_bag(bag_id: int):
 
-    for games in vgames:
+    for bag in bags:
 
-        if games["id"] == game_id:
-            return games
+        if bag["id"] == bag_id:
+            return bag
 
     raise HTTPException(
         status_code=404,
-        detail="Game not found."
+        detail="Bag not found."
     )
-
-
