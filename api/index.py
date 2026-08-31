@@ -265,16 +265,12 @@ bags = [
     "price": "$11,500",
     "collection": "Classic",
     "shape": "structured",
-
-      
-    "color": "",
-    "type": "Shoulder Bag",
-    "origin": "Italy",
-    "availability": "Boutique exclusive",
-    "description": "Iconic Fendi Baguette with hand embroidery.",
-    "buyer_notes": "Playful and collectible."
-
-      
+    "color": "black",
+    "type": "Handbag",
+    "origin": "France",
+    "availability": "Waitlist only",
+    "description": "Iconic Hermès Kelly bag in structured epsom leather.",
+    "buyer_notes": "Timeless and highly coveted."
   },
   {
     "id": 16,
