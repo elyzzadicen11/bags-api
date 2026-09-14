@@ -494,6 +494,15 @@ bags = [
 validated_bags = [Bags(**bag).model_dump() for bag in bags]
 bags = validated_bags
 
+# API KEY AUTHENTICATION
+def verify_api_key(x_api_key: Optional[str] = Header(default=None)):
+    if x_api_key != API_KEY:
+        raise HTTPException(
+            status_code=401,
+            detail="invalid or missing API Key."
+        )
+    return True
+
 #--------------------------------------------------------------------------------------------------------
 
 # HOME
@@ -568,11 +577,3 @@ def get_bag(bag_id: int):
             return bag
     raise HTTPException(status_code=404, detail="Bag not found.")
 #--------------------------------------------------------------------------------------------------------
-# API KEY AUTHENTICATION
-def verify_api_key(x_api_key: Optional[str] = Header(default=None)):
-    if x_api_key != API_KEY:
-        raise HTTPException(
-            status_code=401,
-            detail="invalid or missing API Key."
-        )
-    return True
