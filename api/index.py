@@ -4,7 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
 
-API_KEY = "student-api-key-123"  #balikan mo toh elai
+API_KEY = "ey-pi-ay"  #balikan mo toh elai
 API_VERSION = "1.0"
 
 app = FastAPI(
