@@ -542,7 +542,7 @@ def get_bags():
 #--------------------------------------------------------------------------------------------------------
 
 # SEARCH BAGS
-@app.get("/bags/search")
+@app.get("/api/v1/bags/search", dependencies = [Depends(verify_api_key)])
 def search_bags(q: str = Query(..., min_length=1)):
     q = q.lower()
     results = []
