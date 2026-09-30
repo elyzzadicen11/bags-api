@@ -4,7 +4,12 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
 
-API_KEY = "ey-pi-ay"  #balikan mo toh elai
+API_KEYS = {
+    "list": "ey-pi-ay",
+    "comparison": "compareBags",
+    "personality": "masungit"
+} #balikan mo toh elai
+
 API_VERSION = "1.0"
 
 app = FastAPI(
@@ -496,7 +501,7 @@ bags = validated_bags
 
 # API KEY AUTHENTICATION
 def verify_api_key(x_api_key: Optional[str] = Header(default=None)):
-    if x_api_key != API_KEY:
+    if x_api_key not in API_KEYS.values(): #checking if API key is in API key list
         raise HTTPException(
             status_code=401,
             detail="invalid or missing API Key."
