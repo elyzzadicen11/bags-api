@@ -31,7 +31,7 @@ class Bags(BaseModel):
     id: int
     name: str = Field(min_length=1)
     brand: str = Field(min_length=1)
-    size: Literal["mini", "small", "medium", "large"]
+    size: Literal["Mini", "Small", "Medium", "Large"]
     material: str = Field(min_length=1)
     rating: float = Field(ge=0, le=5)
     price: str = Field(min_length=1)
