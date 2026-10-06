@@ -7,7 +7,7 @@ from typing import Optional, Literal
 API_KEYS = {
     "list": "ey-pi-ay",
     "comparison": "compareBags",
-    "personality": "masungit"
+    "personality": "personality"
 } #balikan mo toh elai
 
 API_VERSION = "1.0"
