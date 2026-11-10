@@ -67,7 +67,29 @@ class Bags(BaseModel):
     compartments: int
     water_resistant: bool
     weight_g: int
-       
+
+class UpdateBags(BaseModel):
+    id: int
+    name: Optional[str] = Field(min_length=1)
+    brand: Optional[str] = Field(min_length=1)
+    size: Optional[Literal["Mini", "Small", "Medium", "Large"]]
+    material: Optional[str] = Field(min_length=1)
+    rating: Optional[float]= Field(ge=0, le=5)
+    price: Optional[float] = Field(gt=0)
+    collection: Optional[str] = Field(min_length=1)
+    shape: Optional[str] = Field(min_length=1)
+    color: Optional[str] = Field(min_length=1)
+    type: Optional[str] = Field(min_length=1)
+    origin: Optional[str] = Field(min_length=1)
+    availability: Optional[str]= Field(min_length=1)
+    description: Optional[str] = Field(min_length=1)
+    buyer_notes: Optional[str]= Field(min_length=1)
+
+    strap_type: Optional[str] = Field(min_length=1)
+    closure: Optional[str] = Field(min_length=1)
+    compartments: Optional[int]
+    water_resistant: Optional[bool]
+    weight_g: Optional[int]      
 
 #--------------------------------------------------------------------------------------------------------
 
@@ -113,8 +135,6 @@ def health_check():
 def get_bags():
   bags = get_bags_db()
   
-  
-  
   return {
         "count": len(bags),
         "bags": bags
@@ -123,12 +143,13 @@ def get_bags():
 #--------------------------------------------------------------------------------------------------------
 
 # SEARCH BAGS
-@app.get("/api/v1/bags/search", dependencies = [Depends(verify_api_key)])
+@app.get("/api/v1/bags/search", dependencies=[Depends(verify_api_key)])
 def search_bags(q: str = Query(..., min_length=1)):
-  bags = get_bags_db()
-  q = q.lower()
-  results = []
-  for bag in bags:
+    bags = get_bags_db()
+    q = q.lower()
+    results = []
+
+    for bag in bags:
         searchable_text = (
             f"{bag['name']} "
             f"{bag['brand']} "
@@ -144,7 +165,15 @@ def search_bags(q: str = Query(..., min_length=1)):
         if q in searchable_text:
             results.append(bag)
 
-  return {
+    if not results:
+        return {
+            "query": q,
+            "message": "No bags exist matching your search.",
+            "count": 0,
+            "results": []
+        }
+
+    return {
         "query": q,
         "count": len(results),
         "results": results
@@ -161,30 +190,99 @@ def get_bag(bag_id: int):
   raise HTTPException(status_code=404, detail="Bag not found.")
 #--------------------------------------------------------------------------------------------------------
 
+# Adding a bag
+
+# CREATE A NEW BAG (POST)
+@app.post("/api/v1/bags", status_code=201, dependencies=[Depends(verify_api_key)]
+)
+def create_bag(bag: Bags):
+
+    bag_data = bag.model_dump()
+
+    try:
+        with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO bags (
+                        id, name, brand, size, material, rating, price,
+                        collection, shape, color, type, origin, availability,
+                        description, buyer_notes, strap_type, closure,
+                        compartments, water_resistant, weight_g
+                    )
+                    VALUES (
+                        %(id)s, %(name)s, %(brand)s, %(size)s, %(material)s,
+                        %(rating)s, %(price)s, %(collection)s, %(shape)s,
+                        %(color)s, %(type)s, %(origin)s, %(availability)s,
+                        %(description)s, %(buyer_notes)s, %(strap_type)s,
+                        %(closure)s, %(compartments)s, %(water_resistant)s,
+                        %(weight_g)s
+                    )
+                    RETURNING *;
+                    """,
+                    bag_data
+                )
+
+                created_bag = cur.fetchone()
+
+    except psycopg.errors.UniqueViolation:
+        raise HTTPException(
+            status_code=409,
+            detail="A bag with this ID already exists."
+        )
+
+    return Bags.model_validate(created_bag).model_dump()
+
+# UPDATE AN EXISTING BAG
+@app.patch("/api/v1/bags/{bag_id}", status_code=200, dependencies=[Depends(verify_api_key)])
+def update_bag(bag_id: int, bag: UpdateBags):
+
+    # Get only the fields submitted by the client
+    bag_data = bag.model_dump(exclude_unset=True)
+
+    # Check if the client submitted anything to update
+    if not bag_data:
+        raise HTTPException(
+            status_code=400,
+            detail="No fields provided for update."
+        )
+
+    # Generate the SQL SET statements
+    set_update = ", ".join(
+        f"{field} = %({field})s" for field in bag_data
+    )
+
+    try:
+        with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    UPDATE bags
+                    SET {set_update}
+                    WHERE id = %(bag_id)s
+                    RETURNING *;
+                    """,
+                    {**bag_data, "bag_id": bag_id}
+                )
+
+                updated_bag = cur.fetchone()
+
+    except psycopg.Error:
+        raise HTTPException(
+            status_code=500,
+            detail="Database update failed."
+        )
+
+    # Check if the requested ID exists
+    if updated_bag is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Bag not found."
+        )
+
+    return Bags.model_validate(updated_bag).model_dump()
 
 
-bags = get_bags_db()
-for b in bags:
-  print(f"""
-ID: {b['id']}
-Name: {b['name']}
-Brand: {b['brand']}
-Size: {b['size']}
-Material: {b['material']}
-Rating: {b['rating']}
-Price: {b['price']:,.2f}
-Collection: {b['collection']}
-Shape: {b['shape']}
-Color: {b['color']}
-Type: {b['type']}
-Origin: {b['origin']}
-Availability: {b['availability']}
-Description: {b['description']}
-Buyer Notes: {b['buyer_notes']}
-Strap Type: {b['strap_type']}
-Closure: {b['closure']}
-Compartments: {b['compartments']}
-Water Resistant: {b['water_resistant']}
-Weight (g): {b['weight_g']}
-{'-' * 50}
-""")
+@app.patch("/api/v1/bags/{bag_id}", status_code=200, dependencies=[Depends(verify_api_key)])
+def delete_bag(bag_id: int, bag: UpdateBags):
+    print()
