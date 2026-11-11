@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, Literal
 from pathlib import Path
 
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
