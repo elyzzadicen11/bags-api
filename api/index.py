@@ -190,8 +190,6 @@ def get_bag(bag_id: int):
   raise HTTPException(status_code=404, detail="Bag not found.")
 #--------------------------------------------------------------------------------------------------------
 
-# Adding a bag
-
 # CREATE A NEW BAG (POST)
 @app.post("/api/v1/bags", status_code=201, dependencies=[Depends(verify_api_key)]
 )
@@ -232,6 +230,8 @@ def create_bag(bag: Bags):
         )
 
     return Bags.model_validate(created_bag).model_dump()
+
+#--------------------------------------------------------------------------------------------------------
 
 # UPDATE AN EXISTING BAG
 @app.patch("/api/v1/bags/{bag_id}", status_code=200, dependencies=[Depends(verify_api_key)])
@@ -281,8 +281,3 @@ def update_bag(bag_id: int, bag: UpdateBags):
         )
 
     return Bags.model_validate(updated_bag).model_dump()
-
-
-@app.patch("/api/v1/bags/{bag_id}", status_code=200, dependencies=[Depends(verify_api_key)])
-def delete_bag(bag_id: int, bag: UpdateBags):
-    print()
