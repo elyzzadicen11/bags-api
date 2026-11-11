@@ -69,27 +69,26 @@ class Bags(BaseModel):
     weight_g: int
 
 class UpdateBags(BaseModel):
-    id: int
-    name: Optional[str] = Field(min_length=1)
-    brand: Optional[str] = Field(min_length=1)
-    size: Optional[Literal["Mini", "Small", "Medium", "Large"]]
-    material: Optional[str] = Field(min_length=1)
-    rating: Optional[float]= Field(ge=0, le=5)
-    price: Optional[float] = Field(gt=0)
-    collection: Optional[str] = Field(min_length=1)
-    shape: Optional[str] = Field(min_length=1)
-    color: Optional[str] = Field(min_length=1)
-    type: Optional[str] = Field(min_length=1)
-    origin: Optional[str] = Field(min_length=1)
-    availability: Optional[str]= Field(min_length=1)
-    description: Optional[str] = Field(min_length=1)
-    buyer_notes: Optional[str]= Field(min_length=1)
+    name: Optional[str] = Field(default=None, min_length=1)
+    brand: Optional[str] = Field(default=None, min_length=1)
+    size: Optional[Literal["Mini", "Small", "Medium", "Large"]] = None
+    material: Optional[str] = Field(default=None, min_length=1)
+    rating: Optional[float]= Field(default=None, ge=0, le=5)
+    price: Optional[float] = Field(default=None, gt=0)
+    collection: Optional[str] = Field(default=None, min_length=1)
+    shape: Optional[str] = Field(default=None, min_length=1)
+    color: Optional[str] = Field(default=None, min_length=1)
+    type: Optional[str] = Field(default=None, min_length=1)
+    origin: Optional[str] = Field(default=None, min_length=1)
+    availability: Optional[str]= Field(default=None, min_length=1)
+    description: Optional[str] = Field(default=None, min_length=1)
+    buyer_notes: Optional[str]= Field(default=None, min_length=1)
 
-    strap_type: Optional[str] = Field(min_length=1)
-    closure: Optional[str] = Field(min_length=1)
-    compartments: Optional[int]
-    water_resistant: Optional[bool]
-    weight_g: Optional[int]      
+    strap_type: Optional[str] = Field(default=None, min_length=1)
+    closure: Optional[str] = Field(default=None, min_length=1)
+    compartments: Optional[int] = None
+    water_resistant: Optional[bool] = None
+    weight_g: Optional[int] = None      
 
 #--------------------------------------------------------------------------------------------------------
 
@@ -301,7 +300,7 @@ def delete_bag(bag_id: int):
             status_code=500,
             detail="Deleting record failed."
         )
-
+  # Check if the requested ID exists
     if deleted_bag is None:
         raise HTTPException(
             status_code=404,
