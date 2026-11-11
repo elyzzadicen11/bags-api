@@ -281,3 +281,32 @@ def update_bag(bag_id: int, bag: UpdateBags):
         )
 
     return Bags.model_validate(updated_bag).model_dump()
+  
+#--------------------------------------------------------------------------------------------------------
+
+# DELETE AN EXISTING BAG
+@app.delete("/api/v1/bags/{bag_id}", status_code=200, dependencies=[Depends(verify_api_key)])
+def delete_bag(bag_id: int):
+    try:
+        with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM bags WHERE id = %(bag_id)s RETURNING *;",
+                    {"bag_id": bag_id}
+                )
+                deleted_bag = cur.fetchone()
+
+    except psycopg.Error:
+        raise HTTPException(
+            status_code=500,
+            detail="Deleting record failed."
+        )
+
+    if deleted_bag is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Bag does not exist."
+        )
+
+    return Bags.model_validate(deleted_bag).model_dump()
+  
