@@ -298,36 +298,38 @@ def search_bags(q: str = Query(..., min_length=1)):
     bags = get_bags_db()
     q = q.lower()
     results = []
-
-    for bag in bags:
-        searchable_text = (
-            f"{bag['name']} "
-            f"{bag['brand']} "
-            f"{bag['size']} "
-            f"{bag['material']} "
-            f"{bag['collection']} "
-            f"{bag['shape']} "
-            f"{bag['color']} "
-            f"{bag['type']} "
-            f"{bag['origin']}"
-        ).lower()
-
-        if q in searchable_text:
-            results.append(bag)
-
-    if not results:
+    try: 
+        for bag in bags:
+            searchable_text = (
+                f"{bag['name']} "
+                f"{bag['brand']} "
+                f"{bag['size']} "
+                f"{bag['material']} "
+                f"{bag['collection']} "
+                f"{bag['shape']} "
+                f"{bag['color']} "
+                f"{bag['type']} "
+                f"{bag['origin']}"
+            ).lower()
+    
+            if q in searchable_text:
+                results.append(bag)
+    
+        if not results:
+            raise HTTPException(
+                status_code=404,
+                detail="Bag does not exist.")
+    
         return {
             "query": q,
-            "message": "No bags exist matching your search.",
-            "count": 0,
-            "results": []
+            "count": len(results),
+            "results": results
         }
-
-    return {
-        "query": q,
-        "count": len(results),
-        "results": results
-    }
+    except psycopg.Error:
+        raise HTTPException(
+            status_code=500,
+            detail="Deleting record failed."
+        )
 #--------------------------------------------------------------------------------------------------------
   
 # GET ONE BAG
