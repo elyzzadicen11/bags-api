@@ -12,16 +12,6 @@ from pathlib import Path
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-
-def get_bags_db():
-  with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
-    with conn.cursor() as cur:
-      cur.execute("SELECT * FROM bags ORDER BY id;") # Database query, getting all da bags
-      rows = cur.fetchall()
-      
-  return[Bags.model_validate(row).model_dump() for row in rows]      
-      
-      
 API_KEYS = {
     "list": os.getenv("API_KEY_NOVA"),
     "comparison": os.getenv("API_KEY_TOTETELLY"),
@@ -43,6 +33,167 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+#FUNCTIONS
+def get_bags_db():
+    try:
+        with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM bags ORDER BY id;")
+                rows = cur.fetchall()
+
+        return [Bags.model_validate(row).model_dump() for row in rows]
+    # Database connection failure
+    except psycopg.OperationalError:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not connect to the database.")
+    #Database query or operation failure.
+    except psycopg.Error:
+        raise HTTPException(
+            status_code=500,
+            detail="Database operation failed.")
+
+#--------------------------------------------------------------------------------------------------------
+
+def create_bag_db(bag):
+    bag_data = bag.model_dump()
+
+    try:
+        with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO bags (
+                        id, name, brand, size, material, rating, price,
+                        collection, shape, color, type, origin, availability,
+                        description, buyer_notes, strap_type, closure,
+                        compartments, water_resistant, weight_g
+                    )
+                    VALUES (
+                        %(id)s, %(name)s, %(brand)s, %(size)s, %(material)s,
+                        %(rating)s, %(price)s, %(collection)s, %(shape)s,
+                        %(color)s, %(type)s, %(origin)s, %(availability)s,
+                        %(description)s, %(buyer_notes)s, %(strap_type)s,
+                        %(closure)s, %(compartments)s, %(water_resistant)s,
+                        %(weight_g)s
+                    )
+                    RETURNING *;
+                    """,
+                    bag_data
+                )
+
+                created_bag = cur.fetchone()
+
+        return Bags.model_validate(created_bag).model_dump()
+
+    except psycopg.errors.UniqueViolation:
+        raise HTTPException(
+            status_code=409,
+            detail="A bag with this ID already exists."
+        )
+
+    except psycopg.OperationalError:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not connect to the database."
+        )
+
+    except psycopg.Error:
+        raise HTTPException(
+            status_code=500,
+            detail="Database operation failed."
+        )
+
+ #--------------------------------------------------------------------------------------------------------
+def update_bag_db(bag_id, bag):
+    # Get only the fields submitted by the client
+    bag_data = bag.model_dump(exclude_unset=True)
+
+    # Check if the client submitted anything to update
+    if not bag_data:
+        raise HTTPException(
+            status_code=400,
+            detail="No fields provided for update."
+        )
+
+    # Generate the SQL SET statements
+    set_update = ", ".join(
+        f"{field} = %({field})s" for field in bag_data
+    )
+
+    try:
+        with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    UPDATE bags
+                    SET {set_update}
+                    WHERE id = %(bag_id)s
+                    RETURNING *;
+                    """,
+                    {**bag_data, "bag_id": bag_id}
+                )
+
+                updated_bag = cur.fetchone()
+
+    except psycopg.OperationalError:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not connect to the database."
+        )
+
+    except psycopg.Error:
+        raise HTTPException(
+            status_code=500,
+            detail="Database update failed."
+        )
+
+    # Check if the requested ID exists
+    if updated_bag is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Bag not found."
+        )
+
+    return Bags.model_validate(updated_bag).model_dump()
+
+ #--------------------------------------------------------------------------------------------------------
+
+def delete_bag_db(bag_id):
+    try:
+        with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM bags WHERE id = %(bag_id)s RETURNING *;",
+                    {"bag_id": bag_id}
+                )
+
+                deleted_bag = cur.fetchone()
+
+    except psycopg.OperationalError:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not connect to the database."
+        )
+
+    except psycopg.Error:
+        raise HTTPException(
+            status_code=500,
+            detail="Deleting record failed."
+        )
+
+    # Check if the requested ID exists
+    if deleted_bag is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Bag does not exist."
+        )
+
+    return Bags.model_validate(deleted_bag).model_dump()
+
+ #--------------------------------------------------------------------------------------------------------
+
 # DATA MODEL
 # Field para validation , Literal pag may options na fixed 
 class Bags(BaseModel):
@@ -97,7 +248,7 @@ def verify_api_key(x_api_key: Optional[str] = Header(default=None)):
     if x_api_key not in API_KEYS.values(): #checking if API key is in API key list
         raise HTTPException(
             status_code=401,
-            detail="invalid or missing API Key."
+            detail="Invalid or missing API Key."
         )
     return True
 
@@ -193,119 +344,19 @@ def get_bag(bag_id: int):
 @app.post("/api/v1/bags", status_code=201, dependencies=[Depends(verify_api_key)]
 )
 def create_bag(bag: Bags):
-
-    bag_data = bag.model_dump()
-
-    try:
-        with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO bags (
-                        id, name, brand, size, material, rating, price,
-                        collection, shape, color, type, origin, availability,
-                        description, buyer_notes, strap_type, closure,
-                        compartments, water_resistant, weight_g
-                    )
-                    VALUES (
-                        %(id)s, %(name)s, %(brand)s, %(size)s, %(material)s,
-                        %(rating)s, %(price)s, %(collection)s, %(shape)s,
-                        %(color)s, %(type)s, %(origin)s, %(availability)s,
-                        %(description)s, %(buyer_notes)s, %(strap_type)s,
-                        %(closure)s, %(compartments)s, %(water_resistant)s,
-                        %(weight_g)s
-                    )
-                    RETURNING *;
-                    """,
-                    bag_data
-                )
-
-                created_bag = cur.fetchone()
-
-    except psycopg.errors.UniqueViolation:
-        raise HTTPException(
-            status_code=409,
-            detail="A bag with this ID already exists."
-        )
-
-    return Bags.model_validate(created_bag).model_dump()
+    return create_bag_db(bag)
 
 #--------------------------------------------------------------------------------------------------------
 
 # UPDATE AN EXISTING BAG
 @app.patch("/api/v1/bags/{bag_id}", status_code=200, dependencies=[Depends(verify_api_key)])
 def update_bag(bag_id: int, bag: UpdateBags):
-
-    # Get only the fields submitted by the client
-    bag_data = bag.model_dump(exclude_unset=True)
-
-    # Check if the client submitted anything to update
-    if not bag_data:
-        raise HTTPException(
-            status_code=400,
-            detail="No fields provided for update."
-        )
-
-    # Generate the SQL SET statements
-    set_update = ", ".join(
-        f"{field} = %({field})s" for field in bag_data
-    )
-
-    try:
-        with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    f"""
-                    UPDATE bags
-                    SET {set_update}
-                    WHERE id = %(bag_id)s
-                    RETURNING *;
-                    """,
-                    {**bag_data, "bag_id": bag_id}
-                )
-
-                updated_bag = cur.fetchone()
-
-    except psycopg.Error:
-        raise HTTPException(
-            status_code=500,
-            detail="Database update failed."
-        )
-
-    # Check if the requested ID exists
-    if updated_bag is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Bag not found."
-        )
-
-    return Bags.model_validate(updated_bag).model_dump()
+    return update_bag_db(bag_id, bag)
   
 #--------------------------------------------------------------------------------------------------------
 
 # DELETE AN EXISTING BAG
 @app.delete("/api/v1/bags/{bag_id}", status_code=200, dependencies=[Depends(verify_api_key)])
 def delete_bag(bag_id: int):
-    try:
-        with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "DELETE FROM bags WHERE id = %(bag_id)s RETURNING *;",
-                    {"bag_id": bag_id}
-                )
-                deleted_bag = cur.fetchone()
-
-    except psycopg.Error:
-        raise HTTPException(
-            status_code=500,
-            detail="Deleting record failed."
-        )
-  # Check if the requested ID exists
-    if deleted_bag is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Bag does not exist."
-        )
-
-    return Bags.model_validate(deleted_bag).model_dump()
+    return delete_bag_db(bag_id)
   
