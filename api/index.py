@@ -272,35 +272,7 @@ def verify_api_key(x_api_key: Optional[str] = Header(default=None)):
         status_code=401,
         detail="Invalid or missing API Key.")
 
-# VERIFYING ACCOUNT for checking the account that logged in
-def verify_admin(token: Optional[str] = Header(default=None, alias="Authorization")): #Reads the login token sent by the website
-    if not token or not token.startswith("Bearer "): # Identifies the token format
-        raise HTTPException(
-            status_code=401,
-            detail="Login is required.")
-    token = token.replace("Bearer ", "", 1)
-
-    try:
-        user = serializer.loads(token,max_age=3600) #Verfies the token signature ; 3600 makes the token expire after an hour
-
-        if user.get("username") != TEST_ACCOUNT:
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid Login session")
-
-        return True
-
-    except SignatureExpired: #Expired logins
-        raise HTTPException(
-            status_code=401,
-            detail="Login session expired. Please log in again."
-        )
-
-    except BadSignature: # invalid tokens
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid login session."
-        )
+#--------------------------------------------------------------------------------------------------------
 
 def verify_optional_admin(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme)
@@ -388,7 +360,6 @@ def health_check():
 #-----------------------------------------------------------------------------
 
 # GET ALL BAGS (Protected)
-# GET ALL BAGS
 @app.get("/api/v1/bags")
 def get_bags(access: str = Depends(verify_user_access)):
     bags = get_bags_db()
@@ -448,10 +419,7 @@ def search_bags(q: str = Query(..., min_length=1), access: str = Depends(verify_
   
 # GET ONE BAG
 @app.get("/api/v1/bags/{bag_id}")
-def get_bag(
-    bag_id: int,
-    access: str = Depends(verify_user_access)
-):
+def get_bag(bag_id: int,access: str = Depends(verify_user_access)):
     if access == "limited":
         raise HTTPException(
             status_code=403,
@@ -472,9 +440,7 @@ def get_bag(
 
 # CREATE A NEW BAG (POST)
 @app.post("/api/v1/bags", status_code=201)
-def create_bag(
-    bag: Bags,
-    access: str = Depends(verify_user_access)
+def create_bag(bag: Bags,access: str = Depends(verify_user_access)
 ):
     if access is not True:
         raise HTTPException(
@@ -488,11 +454,7 @@ def create_bag(
 
 # UPDATE AN EXISTING BAG
 @app.patch("/api/v1/bags/{bag_id}", status_code=200)
-def update_bag(
-    bag_id: int,
-    bag: UpdateBags,
-    access: str = Depends(verify_user_access)
-):
+def update_bag(bag_id: int,bag: UpdateBags,access: str = Depends(verify_user_access)):
     if access is not True:
         raise HTTPException(
             status_code=403,
@@ -501,14 +463,10 @@ def update_bag(
 
     return update_bag_db(bag_id, bag)
   
+
 #--------------------------------------------------------------------------------------------------------
-# DELETE AN EXISTING BAG
-# DELETE AN EXISTING BAG (ADMIN ONLY)
 @app.delete("/api/v1/bags/{bag_id}", status_code=200)
-def delete_bag(
-    bag_id: int,
-    access: str = Depends(verify_user_access)
-):
+def delete_bag(bag_id: int, access: str = Depends(verify_user_access)):
     if access is not True:
         raise HTTPException(
             status_code=403,
