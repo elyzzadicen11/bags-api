@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, Literal
 from pathlib import Path
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 load_dotenv() 
 
@@ -28,6 +29,7 @@ if not SECRET_KEY:
     raise RuntimeError("ENGKKKK wrong.")
     
 serializer = URLSafeTimedSerializer(SECRET_KEY)
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 API_VERSION = "1.0"
@@ -300,21 +302,14 @@ def verify_admin(token: Optional[str] = Header(default=None, alias="Authorizatio
             detail="Invalid login session."
         )
 
-# CHECKING IF AN ADMIN IS LOGGED IN (OPTIONAL)
 def verify_optional_admin(
-    token: Optional[str] = Header(default=None, alias="Authorization")
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme)
 ):
     # No token means the visitor is a guest
-    if not token:
+    if not credentials:
         return False
 
-    if not token.startswith("Bearer "):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid login session."
-        )
-
-    token = token.replace("Bearer ", "", 1)
+    token = credentials.credentials
 
     try:
         user = serializer.loads(token, max_age=3600)
