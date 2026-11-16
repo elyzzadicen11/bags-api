@@ -8,6 +8,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
 from pathlib import Path
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 load_dotenv()
 
@@ -17,6 +18,17 @@ API_KEYS = {
     "comparison": os.getenv("API_KEY_TOTETELLY"),
     "personality": os.getenv("API_KEY_BAGITUP")
 } 
+
+#For guest and logged in user testing
+TEST_ACCOUNT = os.getenv("TEST_ACCOUNT")
+TEST_PASSWORD = os.getenv("TEST_PASSWORD")
+SECRET_KEY = os.getenv("SECRET_KEY")
+
+if not SECRET_KEY:
+    raise RuntimeError("ENGKKKK wrong.")
+    
+serializer = URLSafeTimedSerializer(SECRET_KEY)
+
 
 API_VERSION = "1.0"
 
@@ -239,7 +251,12 @@ class UpdateBags(BaseModel):
     closure: Optional[str] = Field(default=None, min_length=1)
     compartments: Optional[int] = None
     water_resistant: Optional[bool] = None
-    weight_g: Optional[int] = None      
+    weight_g: Optional[int] = None   
+
+#GUEST AND LOGGED IN USER TESTING
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
 #--------------------------------------------------------------------------------------------------------
 
@@ -251,6 +268,36 @@ def verify_api_key(x_api_key: Optional[str] = Header(default=None)):
             detail="Invalid or missing API Key."
         )
     return True
+
+# VERIFYING ACCOUNT for checking the account that logged in
+def verify_admin(token: Optional[str] = Header(default=None, alias="Authorization")): #Reads the login token sent by the website
+    if not token or not token.startswith("Bearer "): # Identifies the token format
+        raise HTTPException(
+            status_code=401,
+            detail="Login is required.")
+    token = token.replace("Bearer ", "", 1)
+
+    try:
+        user = serializer.loads(token,max_age=3600) #Verfies the token signature ; 3600 makes the token expire after an hour
+
+        if user.get("username") != TEST_ACCOUNT:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid Login session")
+
+        return True
+
+    except SignatureExpired: #Expired logins
+        raise HTTPException(
+            status_code=401,
+            detail="Login session expired. Please log in again."
+        )
+
+    except BadSignature: # invalid tokens
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid login session."
+        )
 
 #--------------------------------------------------------------------------------------------------------
 
@@ -356,9 +403,25 @@ def update_bag(bag_id: int, bag: UpdateBags):
     return update_bag_db(bag_id, bag)
   
 #--------------------------------------------------------------------------------------------------------
-
 # DELETE AN EXISTING BAG
 @app.delete("/api/v1/bags/{bag_id}", status_code=200, dependencies=[Depends(verify_api_key)])
 def delete_bag(bag_id: int):
     return delete_bag_db(bag_id)
-  
+
+#--------------------------------------------------------------------------------------------------------
+
+#GUEST AND LOGGED IN USER TESTING
+@app.post("/api/v1/login")
+def login(credentials: LoginRequest, website: str = Depends(verify_api_key)):
+    if credentials.username != TEST_ACCOUNT or credentials.password != TEST_PASSWORD:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid username or password. Please try again."
+        )
+    token = serializer.dumps({"username": credentials.username})
+    return{
+        "message": "Login successful.",
+        "access_token": token,
+        "token_type": "bearer"
+    }
+
