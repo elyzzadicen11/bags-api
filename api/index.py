@@ -262,12 +262,13 @@ class LoginRequest(BaseModel):
 
 # API KEY AUTHENTICATION
 def verify_api_key(x_api_key: Optional[str] = Header(default=None)):
-    if x_api_key not in API_KEYS.values(): #checking if API key is in API key list
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or missing API Key."
-        )
-    return True
+    for website, api_key in API_KEYS.items():
+        if api_key and x_api_key == api_key:
+            return website
+        
+    raise HTTPException(
+        status_code=401,
+        detail="Invalid or missing API Key.")
 
 # VERIFYING ACCOUNT for checking the account that logged in
 def verify_admin(token: Optional[str] = Header(default=None, alias="Authorization")): #Reads the login token sent by the website
@@ -299,6 +300,70 @@ def verify_admin(token: Optional[str] = Header(default=None, alias="Authorizatio
             detail="Invalid login session."
         )
 
+# CHECKING IF AN ADMIN IS LOGGED IN (OPTIONAL)
+def verify_optional_admin(
+    token: Optional[str] = Header(default=None, alias="Authorization")
+):
+    # No token means the visitor is a guest
+    if not token:
+        return False
+
+    if not token.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid login session."
+        )
+
+    token = token.replace("Bearer ", "", 1)
+
+    try:
+        user = serializer.loads(token, max_age=3600)
+
+        if user.get("username") != TEST_ACCOUNT:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid login session."
+            )
+
+        return True
+
+    except SignatureExpired:
+        raise HTTPException(
+            status_code=401,
+            detail="Login session expired. Please log in again."
+        )
+
+    except BadSignature:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid login session."
+        )
+
+def check_access(website: str, is_admin: bool):
+    if is_admin:
+        return True
+    if website == "list":
+        return "limited"
+    if website == "comparison":
+        return False
+    if website == "personality":
+        return False
+    return False
+
+# CHECKING USER ACCESS
+def verify_user_access(
+    website: str = Depends(verify_api_key),
+    is_admin: bool = Depends(verify_optional_admin)
+):
+    access = check_access(website, is_admin)
+
+    if access is False:
+        raise HTTPException(
+            status_code=403,
+            detail="Login is required to access this feature."
+        )
+
+    return access
 #--------------------------------------------------------------------------------------------------------
 
 # HOME
@@ -328,21 +393,28 @@ def health_check():
 #-----------------------------------------------------------------------------
 
 # GET ALL BAGS (Protected)
-@app.get("/api/v1/bags", dependencies = [Depends(verify_api_key)])
-def get_bags():
-  bags = get_bags_db()
-  
-  return {
+# GET ALL BAGS
+@app.get("/api/v1/bags")
+def get_bags(access: str = Depends(verify_user_access)):
+    bags = get_bags_db()
+
+    # Nova guests can only see the first 5 bags
+    if access == "limited":
+        bags = bags[:5]
+
+    return {
         "count": len(bags),
         "bags": bags
     }
-
 #--------------------------------------------------------------------------------------------------------
 
 # SEARCH BAGS
-@app.get("/api/v1/bags/search", dependencies=[Depends(verify_api_key)])
-def search_bags(q: str = Query(..., min_length=1)):
+@app.get("/api/v1/bags/search")
+def search_bags(q: str = Query(..., min_length=1), access: str = Depends(verify_user_access)):
     bags = get_bags_db()
+    if access == "limited":
+        bags = bags[:5]
+        
     q = q.lower()
     results = []
     try: 
@@ -380,34 +452,75 @@ def search_bags(q: str = Query(..., min_length=1)):
 #--------------------------------------------------------------------------------------------------------
   
 # GET ONE BAG
-@app.get("/api/v1/bags/{bag_id}", dependencies = [Depends(verify_api_key)]) #balikan mo toh elai
-def get_bag(bag_id: int):
-  bags = get_bags_db()
-  for bag in bags:
+@app.get("/api/v1/bags/{bag_id}")
+def get_bag(
+    bag_id: int,
+    access: str = Depends(verify_user_access)
+):
+    if access == "limited":
+        raise HTTPException(
+            status_code=403,
+            detail="Please log in to view bag details."
+        )
+
+    bags = get_bags_db()
+
+    for bag in bags:
         if bag["id"] == bag_id:
             return bag
-  raise HTTPException(status_code=404, detail="Bag not found.")
+
+    raise HTTPException(
+        status_code=404,
+        detail="Bag not found."
+    )
 #--------------------------------------------------------------------------------------------------------
 
 # CREATE A NEW BAG (POST)
-@app.post("/api/v1/bags", status_code=201, dependencies=[Depends(verify_api_key)]
-)
-def create_bag(bag: Bags):
+@app.post("/api/v1/bags", status_code=201)
+def create_bag(
+    bag: Bags,
+    access: str = Depends(verify_user_access)
+):
+    if access is not True:
+        raise HTTPException(
+            status_code=403,
+            detail="Admin login is required to add bags."
+        )
+
     return create_bag_db(bag)
 
 #--------------------------------------------------------------------------------------------------------
 
 # UPDATE AN EXISTING BAG
-@app.patch("/api/v1/bags/{bag_id}", status_code=200, dependencies=[Depends(verify_api_key)])
-def update_bag(bag_id: int, bag: UpdateBags):
+@app.patch("/api/v1/bags/{bag_id}", status_code=200)
+def update_bag(
+    bag_id: int,
+    bag: UpdateBags,
+    access: str = Depends(verify_user_access)
+):
+    if access is not True:
+        raise HTTPException(
+            status_code=403,
+            detail="Admin login is required to update bags."
+        )
+
     return update_bag_db(bag_id, bag)
   
 #--------------------------------------------------------------------------------------------------------
 # DELETE AN EXISTING BAG
-@app.delete("/api/v1/bags/{bag_id}", status_code=200, dependencies=[Depends(verify_api_key)])
-def delete_bag(bag_id: int):
-    return delete_bag_db(bag_id)
+# DELETE AN EXISTING BAG (ADMIN ONLY)
+@app.delete("/api/v1/bags/{bag_id}", status_code=200)
+def delete_bag(
+    bag_id: int,
+    access: str = Depends(verify_user_access)
+):
+    if access is not True:
+        raise HTTPException(
+            status_code=403,
+            detail="Admin login is required to delete bags."
+        )
 
+    return delete_bag_db(bag_id)
 #--------------------------------------------------------------------------------------------------------
 
 #GUEST AND LOGGED IN USER TESTING
