@@ -10,7 +10,7 @@ from typing import Optional, Literal
 from pathlib import Path
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
-load_dotenv()
+load_dotenv() 
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 API_KEYS = {
