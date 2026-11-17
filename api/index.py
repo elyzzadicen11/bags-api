@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from psycopg.rows import dict_row
 from fastapi import FastAPI, HTTPException, Header, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Path as PathParam
 from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
@@ -107,6 +108,124 @@ def get_user_db(username):
             status_code=500,
             detail="Database operation failed."
         )
+
+
+#--------------------------------------------------------------------------------------------------------
+# WISHLIST DATABASE FUNCTIONS
+# ADD TO WISHLIST
+def add_to_wishlist_db(user_id, bag_id):
+    try:
+        with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO wishlist (user_id, bag_id)
+                    VALUES (%s, %s)
+                    ON CONFLICT (user_id, bag_id) DO NOTHING
+                    RETURNING wishlist_id, user_id, bag_id, added_at;
+                    """,
+                    (user_id, bag_id)
+                )
+
+                result = cur.fetchone()
+
+                if result is None:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="This bag is already in your wishlist."
+                    )
+
+                return result
+
+    except psycopg.errors.ForeignKeyViolation:
+        raise HTTPException(
+            status_code=404,
+            detail="Bag not found."
+        )
+
+    except psycopg.OperationalError:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not connect to the database."
+        )
+
+    except psycopg.Error:
+        raise HTTPException(
+            status_code=500,
+            detail="Database operation failed."
+        )
+
+#--------------------------------------------------------------------------------------------------------
+# GET WISHLIST
+def get_wishlist_db(user_id):
+    try:
+        with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        w.wishlist_id,
+                        w.added_at,
+                        b.*
+                    FROM wishlist w
+                    JOIN bags b ON w.bag_id = b.id
+                    WHERE w.user_id = %s
+                    ORDER BY w.added_at DESC;
+                    """,
+                    (user_id,)
+                )
+
+                return cur.fetchall()
+
+    except psycopg.OperationalError:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not connect to the database."
+        )
+
+    except psycopg.Error:
+        raise HTTPException(
+            status_code=500,
+            detail="Database operation failed."
+        )
+
+#--------------------------------------------------------------------------------------------------------
+# REMOVE FROM WISHLIST
+def remove_from_wishlist_db(user_id, bag_id):
+    try:
+        with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    DELETE FROM wishlist
+                    WHERE user_id = %s AND bag_id = %s
+                    RETURNING wishlist_id, bag_id;
+                    """,
+                    (user_id, bag_id)
+                )
+
+                result = cur.fetchone()
+
+                if result is None:
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Bag not found in your wishlist."
+                    )
+
+                return result
+
+    except psycopg.OperationalError:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not connect to the database."
+        )
+
+    except psycopg.Error:
+        raise HTTPException(
+            status_code=500,
+            detail="Database operation failed."
+        )
+
 
 #--------------------------------------------------------------------------------------------------------
     
@@ -378,18 +497,26 @@ def verify_optional_user(
             detail="Invalid login session."
         )
 
+# VERIFY REQUIRED USER LOGIN
+def verify_required_user(
+    current_user: Optional[dict] = Depends(verify_optional_user)
+):
+    if current_user is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Please log in to access this feature."
+        )
+
+    return current_user
+
+#--------------------------------------------------------------------------------------------------------
 
 # CHECKING USER ACCESS
 def check_access(website: str, is_admin: bool):
     if is_admin:
         return True
-    if website == "list":
-        return "limited"
-    if website == "comparison":
-        return False
-    if website == "personality":
-        return False
-    return False
+
+    return "limited"
 
 
 def verify_user_access(
@@ -439,31 +566,32 @@ def health_check():
     
 #-----------------------------------------------------------------------------
 
-# GET ALL BAGS (Protected)
+
+# GET ALL BAGS
 @app.get("/api/v1/bags")
 def get_bags(access: str = Depends(verify_user_access)):
     bags = get_bags_db()
-
-    # Nova guests can only see the first 5 bags
-    if access == "limited":
-        bags = bags[:10]
 
     return {
         "count": len(bags),
         "bags": bags
     }
+
 #--------------------------------------------------------------------------------------------------------
+
 
 # SEARCH BAGS
 @app.get("/api/v1/bags/search")
-def search_bags(q: str = Query(..., min_length=1), access: str = Depends(verify_user_access)):
+def search_bags(
+    q: str = Query(..., min_length=1),
+    access: str = Depends(verify_user_access)
+):
     bags = get_bags_db()
-    if access == "limited":
-        bags = bags[:10]
-        
+
     q = q.lower()
     results = []
-    try: 
+
+    try:
         for bag in bags:
             searchable_text = (
                 f"{bag['name']} "
@@ -476,35 +604,37 @@ def search_bags(q: str = Query(..., min_length=1), access: str = Depends(verify_
                 f"{bag['type']} "
                 f"{bag['origin']}"
             ).lower()
-    
+
             if q in searchable_text:
                 results.append(bag)
+
         if not results:
             raise HTTPException(
                 status_code=404,
-                detail="Bag does not exist.")
-    
+                detail="Bag does not exist."
+            )
+
         return {
             "query": q,
             "count": len(results),
             "results": results
         }
+
     except psycopg.Error:
         raise HTTPException(
             status_code=500,
             detail="Searching record failed."
         )
+
 #--------------------------------------------------------------------------------------------------------
   
+
 # GET ONE BAG
 @app.get("/api/v1/bags/{bag_id}")
-def get_bag(bag_id: int,access: str = Depends(verify_user_access)):
-    if access == "limited":
-        raise HTTPException(
-            status_code=403,
-            detail="Please log in to view bag details."
-        )
-
+def get_bag(
+    bag_id: int,
+    access: str = Depends(verify_user_access)
+):
     bags = get_bags_db()
 
     for bag in bags:
@@ -515,6 +645,7 @@ def get_bag(bag_id: int,access: str = Depends(verify_user_access)):
         status_code=404,
         detail="Bag not found."
     )
+
 #--------------------------------------------------------------------------------------------------------
 
 # CREATE A NEW BAG (POST)
@@ -556,7 +687,6 @@ def delete_bag(bag_id: int, access: str = Depends(verify_user_access)):
 #--------------------------------------------------------------------------------------------------------
 
 #GUEST AND LOGGED IN USER TESTING
-
 @app.post("/api/v1/login")
 def login(credentials: LoginRequest, website: str = Depends(verify_api_key)):
 
@@ -586,4 +716,58 @@ def login(credentials: LoginRequest, website: str = Depends(verify_api_key)):
             "username": user["username"],
             "role": user["role"]
         }
+    }
+
+#--------------------------------------------------------------------------------------------------------
+
+
+# WISHLIST ENDPOINTS
+
+# ADD TO WISHLIST
+@app.post("/api/v1/wishlist/{bag_id}", status_code=201)
+def add_to_wishlist(
+    bag_id: int = PathParam(..., ge=1),
+    website: str = Depends(verify_api_key),
+    current_user: dict = Depends(verify_required_user)
+):
+    result = add_to_wishlist_db(
+        current_user["user_id"],
+        bag_id
+    )
+
+    return {
+        "message": "Bag added to wishlist successfully!",
+        "wishlist": result
+    }
+
+
+# VIEW WISHLIST
+@app.get("/api/v1/wishlist")
+def get_wishlist(
+    website: str = Depends(verify_api_key),
+    current_user: dict = Depends(verify_required_user)
+):
+    wishlist = get_wishlist_db(current_user["user_id"])
+
+    return {
+        "count": len(wishlist),
+        "wishlist": wishlist
+    }
+
+
+# REMOVE FROM WISHLIST
+@app.delete("/api/v1/wishlist/{bag_id}")
+def remove_from_wishlist(
+    bag_id: int = PathParam(..., ge=1),
+    website: str = Depends(verify_api_key),
+    current_user: dict = Depends(verify_required_user)
+):
+    result = remove_from_wishlist_db(
+        current_user["user_id"],
+        bag_id
+    )
+
+    return {
+        "message": "Bag removed from wishlist successfully!",
+        "wishlist": result
     }
