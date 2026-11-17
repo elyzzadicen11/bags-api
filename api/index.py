@@ -330,13 +330,6 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
-class InitialAccountsRequest(BaseModel):
-    admin_username: str
-    admin_password: str = Field(min_length=8)
-
-    user_username: str
-    user_password: str = Field(min_length=8)
-
 #--------------------------------------------------------------------------------------------------------
 
 # API KEY AUTHENTICATION
@@ -594,78 +587,3 @@ def login(credentials: LoginRequest, website: str = Depends(verify_api_key)):
             "role": user["role"]
         }
     }
-
-
-@app.post("/api/v1/setup/initial-accounts")
-def setup_initial_accounts(
-    accounts: InitialAccountsRequest,
-    x_setup_secret: str = Header(...)
-):
-    setup_secret = os.getenv("SETUP_SECRET")
-
-    if not setup_secret or not secrets.compare_digest(
-        x_setup_secret, setup_secret
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail="Invalid setup secret."
-        )
-
-    if accounts.admin_username == accounts.user_username:
-        raise HTTPException(
-            status_code=400,
-            detail="Admin and user usernames must be different."
-        )
-
-    admin_hash = password_hasher.hash(accounts.admin_password)
-    user_hash = password_hasher.hash(accounts.user_password)
-
-    try:
-        with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
-            with conn.cursor() as cur:
-
-                cur.execute("SELECT COUNT(*) AS total FROM users;")
-                result = cur.fetchone()
-
-                if result["total"] != 0:
-                    raise HTTPException(
-                        status_code=409,
-                        detail="Accounts have already been created."
-                    )
-
-                cur.execute(
-                    """
-                    INSERT INTO users (username, password_hash, role)
-                    VALUES (%s, %s, 'admin')
-                    RETURNING user_id, username, role;
-                    """,
-                    (accounts.admin_username, admin_hash)
-                )
-                admin = cur.fetchone()
-
-                cur.execute(
-                    """
-                    INSERT INTO users (username, password_hash, role)
-                    VALUES (%s, %s, 'user')
-                    RETURNING user_id, username, role;
-                    """,
-                    (accounts.user_username, user_hash)
-                )
-                user = cur.fetchone()
-
-        return {
-            "message": "Initial accounts created successfully.",
-            "accounts": [admin, user]
-        }
-
-    except psycopg.errors.UniqueViolation:
-        raise HTTPException(
-            status_code=409,
-            detail="A username already exists."
-        )
-
-    except psycopg.Error:
-        raise HTTPException(
-            status_code=500,
-            detail="Database operation failed."
-        )
