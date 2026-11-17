@@ -1,3 +1,6 @@
+
+index.py
+100%
 import os
 import psycopg
 from dotenv import load_dotenv
@@ -8,8 +11,10 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
 from pathlib import Path
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-load_dotenv()
+load_dotenv() 
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 API_KEYS = {
@@ -17,6 +22,18 @@ API_KEYS = {
     "comparison": os.getenv("API_KEY_TOTETELLY"),
     "personality": os.getenv("API_KEY_BAGITUP")
 } 
+
+#For guest and logged in user testing
+TEST_ACCOUNT = os.getenv("TEST_ACCOUNT")
+TEST_PASSWORD = os.getenv("TEST_PASSWORD")
+SECRET_KEY = os.getenv("SECRET_KEY")
+
+if not SECRET_KEY:
+    raise RuntimeError("ENGKKKK wrong.")
+    
+serializer = URLSafeTimedSerializer(SECRET_KEY)
+bearer_scheme = HTTPBearer(auto_error=False)
+
 
 API_VERSION = "1.0"
 
@@ -57,7 +74,7 @@ def get_bags_db():
 #--------------------------------------------------------------------------------------------------------
 
 def create_bag_db(bag):
-    bag_data = bag.model_dump(exclude={"id"})
+    bag_data = bag.model_dump()
 
     try:
         with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
@@ -239,19 +256,84 @@ class UpdateBags(BaseModel):
     closure: Optional[str] = Field(default=None, min_length=1)
     compartments: Optional[int] = None
     water_resistant: Optional[bool] = None
-    weight_g: Optional[int] = None      
+    weight_g: Optional[int] = None   
+
+#GUEST AND LOGGED IN USER TESTING
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
 #--------------------------------------------------------------------------------------------------------
 
 # API KEY AUTHENTICATION
 def verify_api_key(x_api_key: Optional[str] = Header(default=None)):
-    if x_api_key not in API_KEYS.values(): #checking if API key is in API key list
+    for website, api_key in API_KEYS.items():
+        if api_key and x_api_key == api_key:
+            return website
+        
+    raise HTTPException(
+        status_code=401,
+        detail="Invalid or missing API Key.")
+
+#--------------------------------------------------------------------------------------------------------
+
+def verify_optional_admin(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme)
+):
+    # No token means the visitor is a guest
+    if not credentials:
+        return False
+
+    token = credentials.credentials
+
+    try:
+        user = serializer.loads(token, max_age=3600)
+
+        if user.get("username") != TEST_ACCOUNT:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid login session."
+            )
+
+        return True
+
+    except SignatureExpired:
         raise HTTPException(
             status_code=401,
-            detail="Invalid or missing API Key."
+            detail="Login session expired. Please log in again."
         )
-    return True
 
+    except BadSignature:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid login session."
+        )
+
+def check_access(website: str, is_admin: bool):
+    if is_admin:
+        return True
+    if website == "list":
+        return "limited"
+    if website == "comparison":
+        return False
+    if website == "personality":
+        return False
+    return False
+
+# CHECKING USER ACCESS
+def verify_user_access(
+    website: str = Depends(verify_api_key),
+    is_admin: bool = Depends(verify_optional_admin)
+):
+    access = check_access(website, is_admin)
+
+    if access is False:
+        raise HTTPException(
+            status_code=403,
+            detail="Login is required to access this feature."
+        )
+
+    return access
 #--------------------------------------------------------------------------------------------------------
 
 # HOME
@@ -281,21 +363,27 @@ def health_check():
 #-----------------------------------------------------------------------------
 
 # GET ALL BAGS (Protected)
-@app.get("/api/v1/bags", dependencies = [Depends(verify_api_key)])
-def get_bags():
-  bags = get_bags_db()
-  
-  return {
+@app.get("/api/v1/bags")
+def get_bags(access: str = Depends(verify_user_access)):
+    bags = get_bags_db()
+
+    # Nova guests can only see the first 5 bags
+    if access == "limited":
+        bags = bags[:5]
+
+    return {
         "count": len(bags),
         "bags": bags
     }
-
 #--------------------------------------------------------------------------------------------------------
 
 # SEARCH BAGS
-@app.get("/api/v1/bags/search", dependencies=[Depends(verify_api_key)])
-def search_bags(q: str = Query(..., min_length=1)):
+@app.get("/api/v1/bags/search")
+def search_bags(q: str = Query(..., min_length=1), access: str = Depends(verify_user_access)):
     bags = get_bags_db()
+    if access == "limited":
+        bags = bags[:5]
+        
     q = q.lower()
     results = []
     try: 
@@ -333,32 +421,77 @@ def search_bags(q: str = Query(..., min_length=1)):
 #--------------------------------------------------------------------------------------------------------
   
 # GET ONE BAG
-@app.get("/api/v1/bags/{bag_id}", dependencies = [Depends(verify_api_key)]) #balikan mo toh elai
-def get_bag(bag_id: int):
-  bags = get_bags_db()
-  for bag in bags:
+@app.get("/api/v1/bags/{bag_id}")
+def get_bag(bag_id: int,access: str = Depends(verify_user_access)):
+    if access == "limited":
+        raise HTTPException(
+            status_code=403,
+            detail="Please log in to view bag details."
+        )
+
+    bags = get_bags_db()
+
+    for bag in bags:
         if bag["id"] == bag_id:
             return bag
-  raise HTTPException(status_code=404, detail="Bag not found.")
+
+    raise HTTPException(
+        status_code=404,
+        detail="Bag not found."
+    )
 #--------------------------------------------------------------------------------------------------------
 
 # CREATE A NEW BAG (POST)
-@app.post("/api/v1/bags", status_code=201, dependencies=[Depends(verify_api_key)]
-)
-def create_bag(bag: Bags):
+@app.post("/api/v1/bags", status_code=201)
+def create_bag(bag: Bags,access: str = Depends(verify_user_access)
+):
+    if access is not True:
+        raise HTTPException(
+            status_code=403,
+            detail="Admin login is required to add bags."
+        )
+
     return create_bag_db(bag)
 
 #--------------------------------------------------------------------------------------------------------
 
 # UPDATE AN EXISTING BAG
-@app.patch("/api/v1/bags/{bag_id}", status_code=200, dependencies=[Depends(verify_api_key)])
-def update_bag(bag_id: int, bag: UpdateBags):
+@app.patch("/api/v1/bags/{bag_id}", status_code=200)
+def update_bag(bag_id: int,bag: UpdateBags,access: str = Depends(verify_user_access)):
+    if access is not True:
+        raise HTTPException(
+            status_code=403,
+            detail="Admin login is required to update bags."
+        )
+
     return update_bag_db(bag_id, bag)
   
+
+#--------------------------------------------------------------------------------------------------------
+@app.delete("/api/v1/bags/{bag_id}", status_code=200)
+def delete_bag(bag_id: int, access: str = Depends(verify_user_access)):
+    if access is not True:
+        raise HTTPException(
+            status_code=403,
+            detail="Admin login is required to delete bags."
+        )
+
+    return delete_bag_db(bag_id)
 #--------------------------------------------------------------------------------------------------------
 
-# DELETE AN EXISTING BAG
-@app.delete("/api/v1/bags/{bag_id}", status_code=200, dependencies=[Depends(verify_api_key)])
-def delete_bag(bag_id: int):
-    return delete_bag_db(bag_id)
-  
+#GUEST AND LOGGED IN USER TESTING
+@app.post("/api/v1/login")
+def login(credentials: LoginRequest, website: str = Depends(verify_api_key)):
+    if credentials.username != TEST_ACCOUNT or credentials.password != TEST_PASSWORD:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid username or password. Please try again."
+        )
+    token = serializer.dumps({"username": credentials.username})
+    return{
+        "message": "Login successful.",
+        "access_token": token,
+        "token_type": "bearer"
+    }
+
+Displaying bags-api-main.zip.
