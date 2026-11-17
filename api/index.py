@@ -99,7 +99,10 @@ def create_bag_db(bag):
 
                 created_bag = cur.fetchone()
 
-        return Bags.model_validate(created_bag).model_dump()
+        return {
+            "message": "Bag added successfully!",
+            "bag": Bags.model_validate(created_bag).model_dump()
+        }
 
     except psycopg.errors.UniqueViolation:
         raise HTTPException(
@@ -169,8 +172,11 @@ def update_bag_db(bag_id, bag):
             status_code=404,
             detail="Bag not found."
         )
-
-    return Bags.model_validate(updated_bag).model_dump()
+        
+    return {
+        "message": "Updated bag successfully!",
+        "bag": Bags.model_validate(created_bag).model_dump()
+    }
 
  #--------------------------------------------------------------------------------------------------------
 
@@ -204,7 +210,10 @@ def delete_bag_db(bag_id):
             detail="Bag does not exist."
         )
 
-    return Bags.model_validate(deleted_bag).model_dump()
+    return {
+        "message": "Deleted bag successfully!",
+        "bag": Bags.model_validate(created_bag).model_dump()
+       }
 
  #--------------------------------------------------------------------------------------------------------
 
@@ -412,7 +421,7 @@ def search_bags(q: str = Query(..., min_length=1), access: str = Depends(verify_
     except psycopg.Error:
         raise HTTPException(
             status_code=500,
-            detail="Deleting record failed."
+            detail="Searching record failed."
         )
 #--------------------------------------------------------------------------------------------------------
   
