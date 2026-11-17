@@ -175,7 +175,7 @@ def update_bag_db(bag_id, bag):
         
     return {
         "message": "Updated bag successfully!",
-        "bag": Bags.model_validate(created_bag).model_dump()
+        "bag": Bags.model_validate(updated_bag).model_dump()
     }
 
  #--------------------------------------------------------------------------------------------------------
@@ -212,7 +212,7 @@ def delete_bag_db(bag_id):
 
     return {
         "message": "Deleted bag successfully!",
-        "bag": Bags.model_validate(created_bag).model_dump()
+        "bag": Bags.model_validate(deleted_bag).model_dump()
        }
 
  #--------------------------------------------------------------------------------------------------------
