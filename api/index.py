@@ -10,6 +10,8 @@ from typing import Optional, Literal
 from pathlib import Path
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pwdlib import PasswordHash
+import secrets
 
 load_dotenv() 
 
@@ -30,6 +32,8 @@ if not SECRET_KEY:
     
 serializer = URLSafeTimedSerializer(SECRET_KEY)
 bearer_scheme = HTTPBearer(auto_error=False)
+password_hasher = PasswordHash.recommended()
+
 
 
 API_VERSION = "1.0"
@@ -49,6 +53,63 @@ app.add_middleware(
 )
 
 #FUNCTIONS
+
+# USER DATABASE FUNCTIONS
+
+def create_user_db(username, password, role):
+    hashed_password = password_hasher.hash(password)
+
+    try:
+        with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO users (username, password_hash, role)
+                    VALUES (%s, %s, %s)
+                    RETURNING user_id, username, role, created_at;
+                    """,
+                    (username, hashed_password, role)
+                )
+
+                return cur.fetchone()
+
+    except psycopg.errors.UniqueViolation:
+        raise HTTPException(
+            status_code=409,
+            detail="Username already exists."
+        )
+
+    except psycopg.Error:
+        raise HTTPException(
+            status_code=500,
+            detail="Database operation failed."
+        )
+
+#--------------------------------------------------------------------------------------------------------
+
+def get_user_db(username):
+    try:
+        with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT user_id, username, password_hash, role
+                    FROM users
+                    WHERE username = %s;
+                    """,
+                    (username,)
+                )
+
+                return cur.fetchone()
+
+    except psycopg.Error:
+        raise HTTPException(
+            status_code=500,
+            detail="Database operation failed."
+        )
+
+#--------------------------------------------------------------------------------------------------------
+    
 def get_bags_db():
     try:
         with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
@@ -269,6 +330,13 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
+class InitialAccountsRequest(BaseModel):
+    admin_username: str
+    admin_password: str = Field(min_length=8)
+
+    user_username: str
+    user_password: str = Field(min_length=8)
+
 #--------------------------------------------------------------------------------------------------------
 
 # API KEY AUTHENTICATION
@@ -283,25 +351,27 @@ def verify_api_key(x_api_key: Optional[str] = Header(default=None)):
 
 #--------------------------------------------------------------------------------------------------------
 
-def verify_optional_admin(
+
+# VERIFY OPTIONAL USER LOGIN
+def verify_optional_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme)
 ):
     # No token means the visitor is a guest
     if not credentials:
-        return False
+        return None
 
     token = credentials.credentials
 
     try:
         user = serializer.loads(token, max_age=3600)
 
-        if user.get("username") != TEST_ACCOUNT:
+        if not all(key in user for key in ("user_id", "username", "role")):
             raise HTTPException(
                 status_code=401,
                 detail="Invalid login session."
             )
 
-        return True
+        return user
 
     except SignatureExpired:
         raise HTTPException(
@@ -315,6 +385,8 @@ def verify_optional_admin(
             detail="Invalid login session."
         )
 
+
+# CHECKING USER ACCESS
 def check_access(website: str, is_admin: bool):
     if is_admin:
         return True
@@ -326,11 +398,16 @@ def check_access(website: str, is_admin: bool):
         return False
     return False
 
-# CHECKING USER ACCESS
+
 def verify_user_access(
     website: str = Depends(verify_api_key),
-    is_admin: bool = Depends(verify_optional_admin)
+    current_user: Optional[dict] = Depends(verify_optional_user)
 ):
+    is_admin = (
+        current_user is not None
+        and current_user["role"] == "admin"
+    )
+
     access = check_access(website, is_admin)
 
     if access is False:
@@ -340,6 +417,7 @@ def verify_user_access(
         )
 
     return access
+
 #--------------------------------------------------------------------------------------------------------
 
 # HOME
@@ -485,16 +563,109 @@ def delete_bag(bag_id: int, access: str = Depends(verify_user_access)):
 #--------------------------------------------------------------------------------------------------------
 
 #GUEST AND LOGGED IN USER TESTING
+
 @app.post("/api/v1/login")
 def login(credentials: LoginRequest, website: str = Depends(verify_api_key)):
-    if credentials.username != TEST_ACCOUNT or credentials.password != TEST_PASSWORD:
+
+    user = get_user_db(credentials.username)
+
+    if user is None or not password_hasher.verify(
+        credentials.password,
+        user["password_hash"]
+    ):
         raise HTTPException(
             status_code=401,
             detail="Invalid username or password. Please try again."
         )
-    token = serializer.dumps({"username": credentials.username})
-    return{
+
+    token = serializer.dumps({
+        "user_id": user["user_id"],
+        "username": user["username"],
+        "role": user["role"]
+    })
+
+    return {
         "message": "Login successful.",
         "access_token": token,
-        "token_type": "bearer"
+        "token_type": "bearer",
+        "user": {
+            "user_id": user["user_id"],
+            "username": user["username"],
+            "role": user["role"]
+        }
     }
+
+
+@app.post("/api/v1/setup/initial-accounts")
+def setup_initial_accounts(
+    accounts: InitialAccountsRequest,
+    x_setup_secret: str = Header(...)
+):
+    setup_secret = os.getenv("SETUP_SECRET")
+
+    if not setup_secret or not secrets.compare_digest(
+        x_setup_secret, setup_secret
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Invalid setup secret."
+        )
+
+    if accounts.admin_username == accounts.user_username:
+        raise HTTPException(
+            status_code=400,
+            detail="Admin and user usernames must be different."
+        )
+
+    admin_hash = password_hasher.hash(accounts.admin_password)
+    user_hash = password_hasher.hash(accounts.user_password)
+
+    try:
+        with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+
+                cur.execute("SELECT COUNT(*) AS total FROM users;")
+                result = cur.fetchone()
+
+                if result["total"] != 0:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Accounts have already been created."
+                    )
+
+                cur.execute(
+                    """
+                    INSERT INTO users (username, password_hash, role)
+                    VALUES (%s, %s, 'admin')
+                    RETURNING user_id, username, role;
+                    """,
+                    (accounts.admin_username, admin_hash)
+                )
+                admin = cur.fetchone()
+
+                cur.execute(
+                    """
+                    INSERT INTO users (username, password_hash, role)
+                    VALUES (%s, %s, 'user')
+                    RETURNING user_id, username, role;
+                    """,
+                    (accounts.user_username, user_hash)
+                )
+                user = cur.fetchone()
+
+        return {
+            "message": "Initial accounts created successfully.",
+            "accounts": [admin, user]
+        }
+
+    except psycopg.errors.UniqueViolation:
+        raise HTTPException(
+            status_code=409,
+            detail="A username already exists."
+        )
+
+    except psycopg.Error:
+        raise HTTPException(
+            status_code=500,
+            detail="Database operation failed."
+        )
