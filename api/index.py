@@ -65,13 +65,13 @@ def create_bag_db(bag):
                 cur.execute(
                     """
                     INSERT INTO bags (
-                        id, name, brand, size, material, rating, price,
+                        name, brand, size, material, rating, price,
                         collection, shape, color, type, origin, availability,
                         description, buyer_notes, strap_type, closure,
                         compartments, water_resistant, weight_g
                     )
                     VALUES (
-                        %(id)s, %(name)s, %(brand)s, %(size)s, %(material)s,
+                        %(name)s, %(brand)s, %(size)s, %(material)s,
                         %(rating)s, %(price)s, %(collection)s, %(shape)s,
                         %(color)s, %(type)s, %(origin)s, %(availability)s,
                         %(description)s, %(buyer_notes)s, %(strap_type)s,
