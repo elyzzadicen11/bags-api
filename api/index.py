@@ -57,7 +57,7 @@ def get_bags_db():
 #--------------------------------------------------------------------------------------------------------
 
 def create_bag_db(bag):
-    bag_data = bag.model_dump()
+    bag_data = bag.model_dump(exclude={"id"})
 
     try:
         with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
@@ -197,7 +197,7 @@ def delete_bag_db(bag_id):
 # DATA MODEL
 # Field para validation , Literal pag may options na fixed 
 class Bags(BaseModel):
-    id: int
+    id: Optional[int] = None
     name: str = Field(min_length=1)
     brand: str = Field(min_length=1)
     size: Literal["Mini", "Small", "Medium", "Large"]
