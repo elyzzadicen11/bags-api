@@ -1,6 +1,3 @@
-
-index.py
-100%
 import os
 import psycopg
 from dotenv import load_dotenv
