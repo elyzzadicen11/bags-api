@@ -233,7 +233,7 @@ class Bags(BaseModel):
     water_resistant: bool
     weight_g: int
 
-class UpdateBags(BaseModel):
+class UpdateBags(BaseModel): 
     name: Optional[str] = Field(default=None, min_length=1)
     brand: Optional[str] = Field(default=None, min_length=1)
     size: Optional[Literal["Mini", "Small", "Medium", "Large"]] = None
@@ -366,7 +366,7 @@ def get_bags(access: str = Depends(verify_user_access)):
 
     # Nova guests can only see the first 5 bags
     if access == "limited":
-        bags = bags[:5]
+        bags = bags[:10]
 
     return {
         "count": len(bags),
@@ -379,7 +379,7 @@ def get_bags(access: str = Depends(verify_user_access)):
 def search_bags(q: str = Query(..., min_length=1), access: str = Depends(verify_user_access)):
     bags = get_bags_db()
     if access == "limited":
-        bags = bags[:5]
+        bags = bags[:10]
         
     q = q.lower()
     results = []
@@ -399,7 +399,6 @@ def search_bags(q: str = Query(..., min_length=1), access: str = Depends(verify_
     
             if q in searchable_text:
                 results.append(bag)
-    
         if not results:
             raise HTTPException(
                 status_code=404,
