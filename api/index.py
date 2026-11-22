@@ -82,7 +82,7 @@ def create_bag_db(bag):
                         name, brand, size, material, rating, price,
                         collection, shape, color, type, origin, availability,
                         description, buyer_notes, strap_type, closure,
-                        compartments, water_resistant, weight_g
+                        compartments, water_resistant, weight_g, image_url
                     )
                     VALUES (
                         %(name)s, %(brand)s, %(size)s, %(material)s,
@@ -90,7 +90,7 @@ def create_bag_db(bag):
                         %(color)s, %(type)s, %(origin)s, %(availability)s,
                         %(description)s, %(buyer_notes)s, %(strap_type)s,
                         %(closure)s, %(compartments)s, %(water_resistant)s,
-                        %(weight_g)s
+                        %(weight_g)s, %(image_url)s
                     )
                     RETURNING *;
                     """,
@@ -685,6 +685,7 @@ class Bags(BaseModel):
     compartments: int
     water_resistant: bool
     weight_g: int
+    image_url: Optional[str] = None
 
 class UpdateBags(BaseModel): 
     name: Optional[str] = Field(default=None, min_length=1)
@@ -707,6 +708,7 @@ class UpdateBags(BaseModel):
     compartments: Optional[int] = None
     water_resistant: Optional[bool] = None
     weight_g: Optional[int] = None   
+    image_url: Optional[str] = None
 
 #GUEST AND LOGGED IN USER TESTING
 class LoginRequest(BaseModel):
@@ -982,12 +984,12 @@ def add_to_cart(
         "message": "Bag added to cart successfully!",
         "cart_item": result
     }
-
+f
 #UPDATE CART
 @app.patch("/api/v1/cart/{bag_id}")
 def update_cart_item(
+    request: CartItemUpdate,
     bag_id: int = PathParam(..., ge=1),
-    request: CartItemUpdate = None,
     website: str = Depends(verify_api_key),
     current_user: dict = Depends(verify_required_user)
 ):
