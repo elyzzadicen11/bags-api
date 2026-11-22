@@ -816,7 +816,8 @@ def search_bags(
 @app.get("/api/v1/bags/{bag_id}")
 def get_bag(
     bag_id: int,
-    access: str = Depends(verify_user_access)
+    website: str = Depends(verify_api_key),
+    current_user: dict = Depends(verify_required_user)
 ):
     bags = get_bags_db()
 
@@ -954,7 +955,6 @@ def remove_from_wishlist(
 
 #--------------------------------------------------------------------------------------------------------
 # ADD TO CART ENDPOINTS
-
 #GET  CART
 @app.get("/api/v1/cart")
 def get_cart(
