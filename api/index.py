@@ -984,7 +984,7 @@ def add_to_cart(
         "message": "Bag added to cart successfully!",
         "cart_item": result
     }
-f
+
 #UPDATE CART
 @app.patch("/api/v1/cart/{bag_id}")
 def update_cart_item(
